@@ -185,3 +185,91 @@ func TestHash(t *testing.T) {
 
 	client.Del(ctx, keyName)
 }
+
+func TestGeoPoint(t *testing.T) {
+	// create redis client
+	client := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		DB:   0,
+	})
+	defer client.Close()
+
+	// menambah data geopoint
+	ctx := context.Background()
+	keyName := "sellers"
+	err := client.GeoAdd(ctx, keyName, &redis.GeoLocation{
+		Name:      "Toko A",
+		Longitude: 106.822702,
+		Latitude:  -6.177590,
+	}).Err()
+	assert.Nil(t, err)
+
+	err = client.GeoAdd(ctx, keyName, &redis.GeoLocation{
+		Name:      "Toko B",
+		Longitude: 106.820889,
+		Latitude:  -6.174964,
+	}).Err()
+	assert.Nil(t, err)
+
+	distance, err := client.GeoDist(ctx, keyName, "Toko A", "Toko B", "KM").Result()
+	assert.Nil(t, err)
+	assert.NotNil(t, distance)
+	assert.Equal(t, 0.3543, distance)
+
+	radiusResult, err := client.GeoSearch(ctx, keyName, &redis.GeoSearchQuery{
+		Longitude:  106.819143,
+		Latitude:   -6.180182,
+		Radius:     5,
+		RadiusUnit: "KM",
+	}).Result()
+	assert.Nil(t, err)
+	assert.NotNil(t, radiusResult)
+	assert.Equal(t, []string{"Toko A", "Toko B"}, radiusResult)
+}
+
+func TestHyperLogLog(t *testing.T) {
+	// create client redis
+	client := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		DB:   0,
+	})
+	defer client.Close()
+
+	ctx := context.Background()
+	keyName := "visitors"
+
+	// add data to hyperloglog
+	err := client.PFAdd(ctx, keyName, "eko", "kurniawan", "khannedy").Err()
+	assert.Nil(t, err)
+
+	err = client.PFAdd(ctx, keyName, "eko", "budi", "joko").Err()
+	assert.Nil(t, err)
+
+	err = client.PFAdd(ctx, keyName, "budi", "joko", "rully").Err()
+	assert.Nil(t, err)
+
+	result, err := client.PFCount(ctx, keyName).Result()
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, int64(6), result)
+}
+
+func TestPipelineRedis(t *testing.T) {
+	// create redis client
+	client := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	defer client.Close()
+
+	// create pipeline
+	ctx := context.Background()
+	client.Pipelined(ctx, func(pipeliner redis.Pipeliner) error {
+		pipeliner.SetEx(ctx, "name", "Reo", time.Second*3)
+		pipeliner.SetEx(ctx, "address", "Jakarta Selatan", time.Second*3)
+		return nil
+	})
+
+	// test
+	assert.Equal(t, "Reo", client.Get(ctx, "name").Val())
+	assert.Equal(t, "Jakarta Selatan", client.Get(ctx, "address").Val())
+}
