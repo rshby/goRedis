@@ -263,13 +263,36 @@ func TestPipelineRedis(t *testing.T) {
 
 	// create pipeline
 	ctx := context.Background()
-	client.Pipelined(ctx, func(pipeliner redis.Pipeliner) error {
+	_, err := client.Pipelined(ctx, func(pipeliner redis.Pipeliner) error {
 		pipeliner.SetEx(ctx, "name", "Reo", time.Second*3)
 		pipeliner.SetEx(ctx, "address", "Jakarta Selatan", time.Second*3)
 		return nil
 	})
 
 	// test
+	assert.Nil(t, err)
 	assert.Equal(t, "Reo", client.Get(ctx, "name").Val())
 	assert.Equal(t, "Jakarta Selatan", client.Get(ctx, "address").Val())
+}
+
+func TestTransaction(t *testing.T) {
+	// create redis client
+	client := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		DB:   0,
+	})
+	defer client.Close()
+
+	// create transaction
+	ctx := context.Background()
+	_, err := client.TxPipelined(ctx, func(tx redis.Pipeliner) error {
+		tx.SetEx(ctx, "name", "Joko", time.Second*3)
+		tx.SetEx(ctx, "address", "Cirebon", time.Second)
+		return nil
+	})
+
+	// test
+	assert.Nil(t, err)
+	assert.Equal(t, "Joko", client.Get(ctx, "name").Val())
+	assert.Equal(t, "Cirebon", client.Get(ctx, "address").Val())
 }
